@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 
@@ -7,16 +7,16 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
   const [counterValue, setCounterValue] = useState(0);
   const [counterObjects, setCounterObjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [pollingInterval, setPollingInterval] = useState(null);
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
   const MODULE_NAME = 'counter';
   
-  const refreshCounterData = async () => {
+  // Memoized refresh function
+  const refreshCounterData = useCallback(async () => {
     if (!account) return;
     
     console.log('Refreshing counter data...');
-    setLoading(true);
     
     try {
       // Refresh the list of counter objects
@@ -33,7 +33,7 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
       
       console.log('Refreshed counter objects:', objects);
       
-      if (objects && objects.data) {
+      if (objects?.data) {
         setCounterObjects(objects.data);
       }
       
@@ -47,7 +47,7 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
         
         console.log('Refreshed selected counter:', updatedObject);
         
-        if (updatedObject && updatedObject.data && updatedObject.data.content) {
+        if (updatedObject?.data?.content) {
           setCounterObj(updatedObject);
           const newValue = parseInt(updatedObject.data.content.fields.value) || 0;
           setCounterValue(newValue);
@@ -56,23 +56,44 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
       }
     } catch (error) {
       console.error('Error refreshing counter data:', error);
-    } finally {
-      setLoading(false);
     }
-  };
-  
+  }, [account, suiClient, packageId, counterObj, setCounterObj]);
+
+  // Start/stop polling when counterObj changes
+  useEffect(() => {
+    if (counterObj) {
+      // Start polling every 2 seconds
+      const interval = setInterval(refreshCounterData, 2000);
+      setPollingInterval(interval);
+      
+      // Initial refresh
+      refreshCounterData();
+      
+      return () => {
+        clearInterval(interval);
+        setPollingInterval(null);
+      };
+    } else {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+    }
+  }, [counterObj, refreshCounterData]);
+
+  // Initial data load
   useEffect(() => {
     if (account) {
       refreshCounterData();
     }
-  }, [account, suiClient, packageId, refreshTrigger]);
-  
+  }, [account, refreshCounterData]);
+
   const selectCounter = async (object) => {
     console.log('Selected counter object:', object);
     setCounterObj(object);
+    setLoading(true);
     
     try {
-      // Fetch the latest data for this object to ensure we have the current value
       const freshObject = await suiClient.getObject({
         id: object.data.objectId,
         options: {
@@ -80,25 +101,18 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
         }
       });
       
-      console.log('Fresh counter data:', freshObject);
-      
-      if (freshObject && freshObject.data && freshObject.data.content && freshObject.data.content.fields) {
+      if (freshObject?.data?.content?.fields) {
         const value = parseInt(freshObject.data.content.fields.value) || 0;
-        console.log('Setting counter value to:', value);
         setCounterValue(value);
-        
         setCounterObj(freshObject);
-      } else if (object.data && object.data.content && object.data.content.fields) {
-        const value = parseInt(object.data.content.fields.value) || 0;
-        console.log('Setting counter value to (from original object):', value);
-        setCounterValue(value);
       }
     } catch (error) {
       console.error('Error fetching fresh counter data:', error);
-      
-      if (object.data && object.data.content && object.data.content.fields) {
+      if (object.data?.content?.fields) {
         setCounterValue(parseInt(object.data.content.fields.value) || 0);
       }
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -107,21 +121,13 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
     
     setLoading(true);
     try {
-      console.log('Creating counter with package ID:', packageId);
-      
-      // Create a transaction block
       const tx = new Transaction();
-      
-      // Add the move call to create a counter
       tx.moveCall({
         target: `${packageId}::${MODULE_NAME}::create`,
         arguments: [],
       });
       
-      console.log('Transaction prepared:', tx);
-      
-      // Execute the transaction
-      const result = await signAndExecute({
+      await signAndExecute({
         transaction: tx,
         options: {
           showEffects: true,
@@ -129,20 +135,11 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
         },
       });
       
-      console.log('Transaction result:', result);
-      
-      // Wait a moment for blockchain state to update
-      setTimeout(() => {
-        // Trigger a refresh of all counter data
-        setRefreshTrigger(prev => prev + 1);
-        
-        // Show success message
-        alert('Counter created successfully! Check your wallet for the new object.');
-      }, 1000); // Wait 1 second before refreshing
-      
+      // Optimistically refresh data after 1 second
+      setTimeout(refreshCounterData, 1000);
     } catch (error) {
       console.error('Error creating counter:', error);
-      alert(`Failed to create counter: ${error.message}`);
+    } finally {
       setLoading(false);
     }
   };
@@ -152,7 +149,9 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
     
     setLoading(true);
     try {
-      console.log('Incrementing counter with ID:', counterObj.data.objectId);
+      // Optimistic update - increment locally immediately
+      const optimisticValue = counterValue + 1;
+      setCounterValue(optimisticValue);
       
       const tx = new Transaction();
       tx.moveCall({
@@ -160,9 +159,7 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
         arguments: [tx.object(counterObj.data.objectId)],
       });
       
-      console.log('Transaction prepared:', tx);
-      
-      const result = await signAndExecute({
+      await signAndExecute({
         transaction: tx,
         options: {
           showEffects: true,
@@ -170,20 +167,12 @@ function useCounterOperations(packageId, counterObj, setCounterObj) {
         },
       });
       
-      console.log('Transaction result:', result);
-      
-      // Wait a moment for blockchain state to update
-      setTimeout(() => {
-        // Trigger a refresh of all counter data
-        setRefreshTrigger(prev => prev + 1);
-        
-        // Show success message
-        alert('Counter incremented successfully!');
-      }, 1000); 
-      
+      // The polling will automatically pick up the new value
     } catch (error) {
       console.error('Error incrementing counter:', error);
-      alert(`Failed to increment counter: ${error.message}`);
+      // Revert optimistic update if failed
+      setCounterValue(counterValue);
+    } finally {
       setLoading(false);
     }
   };
