@@ -20,8 +20,17 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
         <WalletProvider>
-          <div className="App">
-            <CounterApp />
+          <div className="app-container">
+            <header className="app-header">
+              <h1>Sui Counter DApp</h1>
+              <p className="network-badge">Testnet</p>
+            </header>
+            <main className="app-content">
+              <CounterApp />
+            </main>
+            <footer className="app-footer">
+              <p>© 2023 My Sui DApp. All rights reserved.</p>
+            </footer>
           </div>
         </WalletProvider>
       </SuiClientProvider>
