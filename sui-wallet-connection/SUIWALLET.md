@@ -32,64 +32,17 @@ Install the `@mysten/wallet-adapter` package and its dependencies.
 ```bash
 npm install @mysten/wallet-adapter-react @mysten/wallet-adapter-base @mysten/wallet-adapter-sui-wallet
 ```
-
+or 
+```bash
+npm i --save @mysten/dapp-kit @mysten/sui @tanstack/react-query
+```
 ---
 
 ### **Step 3: Create the Wallet Connection Logic**
 Create a simple React component to handle wallet connection logic.
  **Resources to use from sui doc**
  
-
-#### **App.js**
-Replace the content of `src/App.js` with the following code:
-
-```javascript
-import React from 'react';
-import { WalletProvider, useWallet } from '@mysten/wallet-adapter-react';
-import { SuiWalletAdapter } from '@mysten/wallet-adapter-sui-wallet';
-
-function ConnectWalletButton() {
-  const { connected, connecting, select, wallet, connect, disconnect } = useWallet();
-
-  const handleConnect = async () => {
-    if (!connected) {
-      await connect();
-    }
-  };
-
-  return (
-    <div>
-      <h1>Sui Wallet Connection</h1>
-      {connected ? (
-        <div>
-          <p>Connected to: {wallet?.adapter.name}</p>
-          <button onClick={disconnect}>Disconnect</button>
-        </div>
-      ) : (
-        <button onClick={handleConnect} disabled={connecting}>
-          {connecting ? 'Connecting...' : 'Connect Wallet'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function App() {
-  const adapters = [new SuiWalletAdapter()];
-
-  return (
-    <WalletProvider adapters={adapters} autoConnect>
-      <div className="App">
-        <ConnectWalletButton />
-      </div>
-    </WalletProvider>
-  );
-}
-
-export default App;
-```
-
----
+# go for sui docs
 
 ### **Step 4: Run the Application**
 Start the development server to test the wallet connection.
@@ -126,34 +79,3 @@ Once connected, the app will display the name of the connected wallet and provid
 
 ---
 
-### **Optional Enhancements**
-1. **Display Wallet Address**:
-   Use the `getAddress()` method from the wallet adapter to fetch and display the user's wallet address.
-
-   ```javascript
-   const { wallet, connected } = useWallet();
-
-   const getAddress = async () => {
-     if (connected && wallet) {
-       const address = await wallet.adapter.getAddress();
-       console.log('Wallet Address:', address);
-     }
-   };
-   ```
-
-2. **Handle Multiple Wallets**:
-   Add support for additional wallets by including more adapters in the `adapters` array.
-
-   ```javascript
-   import { SuiWalletAdapter } from '@mysten/wallet-adapter-sui-wallet';
-   import { EthosWalletAdapter } from '@mysten/wallet-adapter-ethos';
-
-   const adapters = [new SuiWalletAdapter(), new EthosWalletAdapter()];
-   ```
-
-3. **Styling**:
-   Use CSS or a library like TailwindCSS to style the wallet connection UI.
-
----
-
-This setup provides a minimal yet functional implementation of a Sui wallet connection in a React application. You can expand it further based on your specific requirements.

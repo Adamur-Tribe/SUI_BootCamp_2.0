@@ -1,17 +1,23 @@
-// App.js
-import React from 'react';
-import './App.css';
-import WalletInfo from './Components/ConnectWalletButton';
-
-
+import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { getFullnodeUrl } from '@mysten/sui/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+ 
+// Config options for the networks you want to connect to
+const { networkConfig } = createNetworkConfig({
+	localnet: { url: getFullnodeUrl('localnet') },
+	mainnet: { url: getFullnodeUrl('mainnet') },
+});
+const queryClient = new QueryClient();
+ 
 function App() {
-  return (
-    <div className="app">
-      <h1>Simple Sui Wallet Connection</h1>
-       <WalletInfo />
-      
-    </div>
-  );
+	return (
+		<QueryClientProvider client={queryClient}>
+			<SuiClientProvider networks={networkConfig} defaultNetwork="localnet">
+				<WalletProvider>
+					{/* <YourApp /> */}
+				</WalletProvider>
+			</SuiClientProvider>
+		</QueryClientProvider>
+	);
 }
-
 export default App;
